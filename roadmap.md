@@ -1,0 +1,4 @@
+- [ ] Build VoiceConnect welcome, dashboard, messaging, contacts, and settings screens.
+- [ ] Add voice/text controls, safe send confirmation, simulated calls, and local demo data.
+- [ ] Add screen-specific metadata, accessibility styling, setup notes, and focused tests.
+- [ ] Verify the main demo flows and commit the finished changes.
