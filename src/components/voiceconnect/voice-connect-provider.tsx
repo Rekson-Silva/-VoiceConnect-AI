@@ -47,6 +47,16 @@ interface SpeechRecognitionLike {
   abort: () => void;
 }
 
+interface VoiceCommandSet {
+  home: string[];
+  send: string[];
+  messages: string[];
+  contacts: string[];
+  repeat: string[];
+  stop: string[];
+  back: string[];
+}
+
 type SpeechWindow = Window & {
   SpeechRecognition?: new () => SpeechRecognitionLike;
   webkitSpeechRecognition?: new () => SpeechRecognitionLike;
@@ -68,6 +78,7 @@ interface VoiceConnectContextValue {
   speechOutputSupported: boolean;
   lastTranscript: string;
   transcriptVersion: number;
+  transcriptRoute: string;
   startListening: () => void;
   stopListening: () => void;
   speak: (text: string) => void;
@@ -77,7 +88,7 @@ interface VoiceConnectContextValue {
 
 const VoiceConnectContext = createContext<VoiceConnectContextValue | null>(null);
 
-const VOICE_COMMANDS: Record<LanguageCode, Record<string, string[]>> = {
+const VOICE_COMMANDS: Record<LanguageCode, VoiceCommandSet> = {
   "en-IN": {
     home: ["go to home", "go home", "home"],
     send: ["send a message", "send message"],
@@ -140,11 +151,13 @@ function readStoredSettings(): AppSettings {
     if (!stored) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(stored) as Partial<AppSettings>;
     const validLanguage = LANGUAGE_OPTIONS.some((language) => language.code === parsed.language);
-    const validFontSize = parsed.fontSize === "normal" || parsed.fontSize === "large" || parsed.fontSize === "largest";
+    const fontSize = parsed.fontSize === "normal" || parsed.fontSize === "large" || parsed.fontSize === "largest"
+      ? parsed.fontSize
+      : DEFAULT_SETTINGS.fontSize;
     return {
       language: validLanguage ? (parsed.language as LanguageCode) : DEFAULT_SETTINGS.language,
       theme: parsed.theme === "light" ? "light" : "dark",
-      fontSize: validFontSize ? parsed.fontSize : DEFAULT_SETTINGS.fontSize,
+      fontSize,
       highContrast: typeof parsed.highContrast === "boolean" ? parsed.highContrast : DEFAULT_SETTINGS.highContrast,
       speechRate: typeof parsed.speechRate === "number" ? parsed.speechRate : DEFAULT_SETTINGS.speechRate,
     };
@@ -177,6 +190,7 @@ export function VoiceConnectProvider({ children }: { children: ReactNode }) {
   const [speechOutputSupported, setSpeechOutputSupported] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [transcriptVersion, setTranscriptVersion] = useState(0);
+  const [transcriptRoute, setTranscriptRoute] = useState("/");
   const [lastSpoken, setLastSpoken] = useState("");
   const [draftRecipient, setDraftRecipient] = useState<string | null>(null);
 
@@ -248,32 +262,39 @@ export function VoiceConnectProvider({ children }: { children: ReactNode }) {
       setStatus(`Heard: ${trimmed}`);
 
       const commands = VOICE_COMMANDS[settings.language];
-      if (matchesPhrase(trimmed, commands.stop)) {
+      let destination = router.state.location.pathname;
+      if (matchesPhrase(trimmed, commands["stop"])) {
         stopSpeaking();
         setStatus("Speech stopped.");
         return;
       }
-      if (matchesPhrase(trimmed, commands.repeat)) {
+      if (matchesPhrase(trimmed, commands["repeat"])) {
         if (lastSpoken) speak(lastSpoken);
         else setStatus("Nothing has been read aloud yet.");
         return;
       }
-      if (matchesPhrase(trimmed, commands.home)) {
+      if (matchesPhrase(trimmed, commands["home"])) {
+        destination = "/dashboard";
         setStatus("Opening your dashboard.");
         void router.navigate({ to: "/dashboard" });
-      } else if (matchesPhrase(trimmed, commands.send)) {
+      } else if (matchesPhrase(trimmed, commands["send"])) {
+        destination = "/send";
         setStatus("Opening messages.");
         void router.navigate({ to: "/send" });
-      } else if (matchesPhrase(trimmed, commands.messages)) {
+      } else if (matchesPhrase(trimmed, commands["messages"])) {
+        destination = "/messages";
         setStatus("Opening your inbox.");
         void router.navigate({ to: "/messages" });
-      } else if (matchesPhrase(trimmed, commands.contacts)) {
+      } else if (matchesPhrase(trimmed, commands["contacts"])) {
+        destination = "/contacts";
         setStatus("Opening contacts.");
         void router.navigate({ to: "/contacts" });
-      } else if (matchesPhrase(trimmed, commands.back)) {
+      } else if (matchesPhrase(trimmed, commands["back"])) {
         if (window.history.length > 1) window.history.back();
         else void router.navigate({ to: "/dashboard" });
+        destination = window.history.length > 1 ? router.state.location.pathname : "/dashboard";
       }
+      setTranscriptRoute(destination);
     },
     [lastSpoken, router, settings.language, speak, stopSpeaking],
   );
@@ -359,6 +380,7 @@ export function VoiceConnectProvider({ children }: { children: ReactNode }) {
       recognitionSupported,
       speechOutputSupported,
       lastTranscript,
+      transcriptRoute,
       transcriptVersion,
       startListening,
       stopListening,
@@ -383,6 +405,7 @@ export function VoiceConnectProvider({ children }: { children: ReactNode }) {
       stopListening,
       stopSpeaking,
       transcriptVersion,
+      transcriptRoute,
       updateSettings,
     ],
   );
